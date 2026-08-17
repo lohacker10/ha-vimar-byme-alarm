@@ -1,0 +1,14 @@
+{
+  "domain": "vimar_alarm",
+  "name": "Vimar By-me Alarm",
+  "version": "0.1.0",
+  "config_flow": true,
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "codeowners": [
+    "@lohacker10"
+  ],
+  "requirements": [],
+  "documentation": "https://github.com/lohacker10/ha-vimar-byme-alarm",
+  "issue_tracker": "https://github.com/lohacker10/ha-vimar-byme-alarm/issues"
+}

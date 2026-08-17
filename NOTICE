@@ -1,0 +1,19 @@
+Vimar By-me Alarm
+
+This project is an independent community integration and is not affiliated with
+or endorsed by Vimar.
+
+Implementation techniques, TLS compatibility and the Vimar Web Server SOAP/database
+approach are derived in part from:
+
+  h4de5/home-assistant-vimar
+  https://github.com/h4de5/home-assistant-vimar
+  License: GPL-3.0
+
+The passive TCP event-stream investigation and future push-update design are inspired by:
+
+  lohacker10/ha-vimar-doorbell
+  https://github.com/lohacker10/ha-vimar-doorbell
+
+SAI-specific behavior implemented here was reverse engineered from captures made
+against a Vimar 01946 Web Server running firmware 2.11.

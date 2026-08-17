@@ -1,0 +1,29 @@
+{
+  "title": "Vimar By-me Alarm",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connessione al Web Server Vimar By-me",
+        "description": "Configura soltanto il SAI/antintrusione. Il PIN non viene salvato: Home Assistant lo richiede quando inserisci o disinserisci una parzializzazione.",
+        "data": {
+          "host": "IP/hostname Web Server",
+          "username": "Username Web Server",
+          "password": "Password Web Server",
+          "port": "Porta HTTPS",
+          "verify_ssl": "Verifica certificato HTTPS",
+          "timeout": "Timeout connessione (secondi)",
+          "scan_interval": "Intervallo lettura stato (secondi)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi al Web Server Vimar.",
+      "invalid_auth": "Username o password del Web Server non validi.",
+      "no_partitions": "Nessuna parzializzazione SAI trovata.",
+      "unknown": "Errore inatteso durante la configurazione."
+    },
+    "abort": {
+      "already_configured": "Questo Web Server è già configurato."
+    }
+  }
+}

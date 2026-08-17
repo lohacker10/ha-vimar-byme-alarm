@@ -1,0 +1,17 @@
+"""Constants for Vimar By-me Alarm."""
+
+DOMAIN = "vimar_alarm"
+
+CONF_SCAN_INTERVAL = "scan_interval"
+CONF_VERIFY_SSL = "verify_ssl"
+
+DEFAULT_PORT = 443
+DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_TIMEOUT = 8
+DEFAULT_VERIFY_SSL = False
+
+STATE_DISARMED = "1"
+STATE_ARMED = "2"
+
+PARTITIONS_CONTAINER = "_DPAD_VIMAR_SAI_PARTITIONS_CONTAINER"
+PLATFORMS = ["alarm_control_panel"]
