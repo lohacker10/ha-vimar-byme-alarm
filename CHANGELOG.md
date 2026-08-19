@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+- Fixed multi-partition arm/disarm to mirror the Vimar 01946 Web Server sequence captured on firmware 2.11.
+- Multi-partition commands are sent in descending SAI partialization index order.
+- Every command in a multi-partition batch except the final one uses `SYNCDB`; the final command uses `NO-OPTIONALS`.
+- Single-partition commands remain unchanged and continue to use `NO-OPTIONALS`.
+- No changes to TCP push, contact entities, or triggered-state mapping.
+
 ## 0.2.1
 
 - Expanded read-only diagnostics for contact-state investigation.

@@ -67,13 +67,18 @@ class VimarCommandsMixin:
         return 0 <= pos < len(grants) and grants[pos] == "1"
 
     def _setvalue_once(
-        self, partition: VimarPartition, value: str, pin: str
+        self,
+        partition: VimarPartition,
+        value: str,
+        pin: str,
+        *,
+        optionals: str = "NO-OPTIONALS",
     ) -> str:
         root = self._soap(
             '<service-runonelement xmlns="urn:xmethods-dpadws">'
             f"<payload>{value}</payload>"
             f"<hashcode>{pin}</hashcode>"
-            "<optionals>NO-OPTIONALS</optionals>"
+            f"<optionals>{optionals}</optionals>"
             "<callsource>WEB</callsource>"
             f"<sessionid>{self._session_id}</sessionid>"
             "<waittime>5</waittime>"
@@ -111,11 +116,12 @@ class VimarCommandsMixin:
         armed: bool,
         pin: str | None,
     ) -> None:
-        """Set several partializations after validating one PIN exactly once.
+        """Set partializations using the same batch pattern as the Vimar Web UI.
 
-        Permission is checked for every requested partialization before any
-        SETVALUE is sent. No automatic rollback is attempted if a later
-        command fails.
+        Vimar 01946 firmware 2.11 sends selected partializations in descending
+        SAI index order. Every command except the last uses SYNCDB; the final
+        command uses NO-OPTIONALS. A single-partition command therefore keeps
+        using NO-OPTIONALS.
         """
         with self._lock:
             if not partitions:
@@ -135,12 +141,25 @@ class VimarCommandsMixin:
 
             target = STATE_ARMED if armed else STATE_DISARMED
             current = self.get_partition_states(partitions)
+            pending = [
+                partition
+                for partition in partitions
+                if current.get(partition.object_id) != target
+            ]
+            pending.sort(key=lambda partition: partition.index_id, reverse=True)
 
-            for partition in partitions:
-                if current.get(partition.object_id) == target:
-                    continue
-
-                result = self._setvalue_once(partition, target, code)
+            for position, partition in enumerate(pending):
+                optionals = (
+                    "SYNCDB"
+                    if position < len(pending) - 1
+                    else "NO-OPTIONALS"
+                )
+                result = self._setvalue_once(
+                    partition,
+                    target,
+                    code,
+                    optionals=optionals,
+                )
                 if result.startswith("LGMG"):
                     self._session_id = None
                     self.login()
@@ -149,7 +168,12 @@ class VimarCommandsMixin:
                         raise VimarAlarmPermissionError(
                             f"PIN has no grant for partition {partition.name}"
                         )
-                    result = self._setvalue_once(partition, target, code)
+                    result = self._setvalue_once(
+                        partition,
+                        target,
+                        code,
+                        optionals=optionals,
+                    )
 
                 if result and result != "DPCM-0000":
                     raise VimarAlarmCommandError(
