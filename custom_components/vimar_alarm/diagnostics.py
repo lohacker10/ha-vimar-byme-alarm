@@ -23,19 +23,29 @@ async def async_get_config_entry_diagnostics(
     recent_events = await hass.async_add_executor_job(
         runtime.api.get_recent_sai_events, 100
     )
-    event_summary = await hass.async_add_executor_job(runtime.api.get_sai_event_summary)
+    nonstandard_events = await hass.async_add_executor_job(
+        runtime.api.get_nonstandard_sai_events, 200
+    )
+    event_summary = await hass.async_add_executor_job(
+        runtime.api.get_sai_event_summary
+    )
+    logical_zone_values = await hass.async_add_executor_job(
+        runtime.api.get_logical_zone_values
+    )
 
     return {
         "entry_data": async_redact_data(dict(entry.data), _TO_REDACT),
         "partitions": [
             {
-                "object_id": p.object_id,
-                "name": p.name,
-                "index_id": p.index_id,
-                "status_id": p.status_id,
-                "raw_state": runtime.coordinator.data.partition_states.get(p.object_id),
+                "object_id": partition.object_id,
+                "name": partition.name,
+                "index_id": partition.index_id,
+                "status_id": partition.status_id,
+                "raw_state": runtime.coordinator.data.partition_states.get(
+                    partition.object_id
+                ),
             }
-            for p in runtime.partitions
+            for partition in runtime.partitions
         ],
         "logical_zones": [
             {
@@ -46,25 +56,33 @@ async def async_get_config_entry_diagnostics(
             }
             for zone in runtime.logical_zones
         ],
+        "logical_zone_values": logical_zone_values,
         "contact_inputs": [
             {
-                "interface_object_id": c.interface_object_id,
-                "channel_object_id": c.channel_object_id,
-                "device_address": c.device_address,
-                "input_number": c.input_number,
+                "interface_object_id": contact.interface_object_id,
+                "channel_object_id": contact.channel_object_id,
+                "device_address": contact.device_address,
+                "input_number": contact.input_number,
                 "raw_state": runtime.coordinator.data.contact_states.get(
-                    c.channel_object_id
+                    contact.channel_object_id
                 ),
             }
-            for c in runtime.contact_inputs
+            for contact in runtime.contact_inputs
         ],
         "tcp_push": runtime.tcp_listener.diagnostics(),
-        # Deliberately omit ZONE_NAME/PARTIALIZATION_NAME/DEVICE_NAME from log rows.
+        # Deliberately omit ZONE_NAME/PARTIALIZATION_NAME/DEVICE_NAME from logs.
         "recent_sai_events": recent_events,
+        "nonstandard_sai_events": nonstandard_events,
         "sai_event_summary": event_summary,
         "notes": {
-            "triggered_mapping": "not implemented until a historical event class is verified",
-            "contact_mapping": "physical channels are experimental; identify with alarm disarmed",
+            "triggered_mapping": (
+                "not implemented until a historical event class is verified"
+            ),
+            "contact_mapping": (
+                "physical BYMEFBGO values were observed static on the "
+                "development 01946; logical-zone raw values are included "
+                "for read-only investigation"
+            ),
             "pin_persisted": False,
         },
     }

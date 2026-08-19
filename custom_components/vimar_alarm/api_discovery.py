@@ -49,6 +49,10 @@ class VimarDiscoveryMixin:
                 continue
         return out
 
+    def get_logical_zone_values(self) -> list[dict[str, str]]:
+        """Read raw values for logical SAI groups/zones for diagnostics only."""
+        return self._select("SELECT ID,NAME,STATUS_ID,CURRENT_VALUE,MIN_VALUE,MAX_VALUE,TYPE,VALUES_TYPE,OPTIONALP FROM DPADD_OBJECT WHERE TYPE='BYMEIDX' AND VALUES_TYPE='CH_SAI' AND STATUS_ID>=0 ORDER BY ID")
+
     def get_state_snapshot(self, partitions: list[VimarPartition], contact_inputs: list[VimarContactInput]) -> VimarStateSnapshot:
         """Read all alarm and contact current values in one SELECT."""
         ids = [p.status_id for p in partitions]
@@ -62,4 +66,3 @@ class VimarDiscoveryMixin:
 
     def get_partition_states(self, partitions: list[VimarPartition]) -> dict[int, str]:
         return self.get_state_snapshot(partitions, []).partition_states
-

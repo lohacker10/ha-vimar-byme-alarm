@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Expanded read-only diagnostics for contact-state investigation.
+- Logical SAI zones now include their raw database `CURRENT_VALUE` in diagnostics.
+- Added historical non-standard SAI event rows (`EVENT_TYPE` other than 0/1) to diagnostics so alarm/tamper/fault classes can be investigated without deliberately triggering the siren.
+- Kept arm/disarm, aggregate-panel behavior, TCP push, and physical contact entities unchanged while their remaining protocol semantics are investigated.
+
 ## 0.2.0
 
 - Added passive TCP `45211` listener with automatic reconnect.
