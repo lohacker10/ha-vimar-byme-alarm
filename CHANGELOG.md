@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3
+
+- Added read-only diagnostics that inspect outgoing and incoming `DPADD_OBJECT_RELATION` links around logical SAI zones and physical two-input contact interfaces.
+- Added a read-only status-link probe for objects whose `STATUS_ID` points at a SAI zone/interface.
+- Contact entities remain unchanged; the new probes are only for identifying the authoritative live contact state source before changing entity behavior.
+- No changes to arm/disarm, the validated multi-partition `SYNCDB` sequence, or TCP push.
+
 ## 0.2.2
 
 - Fixed multi-partition arm/disarm to mirror the Vimar 01946 Web Server sequence captured on firmware 2.11.

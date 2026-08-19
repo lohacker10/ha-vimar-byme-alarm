@@ -32,6 +32,15 @@ async def async_get_config_entry_diagnostics(
     logical_zone_values = await hass.async_add_executor_job(
         runtime.api.get_logical_zone_values
     )
+    sai_relation_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_relation_probe
+    )
+    sai_incoming_relation_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_incoming_relation_probe
+    )
+    sai_status_link_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_status_link_probe
+    )
 
     return {
         "entry_data": async_redact_data(dict(entry.data), _TO_REDACT),
@@ -57,6 +66,9 @@ async def async_get_config_entry_diagnostics(
             for zone in runtime.logical_zones
         ],
         "logical_zone_values": logical_zone_values,
+        "sai_relation_probe": sai_relation_probe,
+        "sai_incoming_relation_probe": sai_incoming_relation_probe,
+        "sai_status_link_probe": sai_status_link_probe,
         "contact_inputs": [
             {
                 "interface_object_id": contact.interface_object_id,
@@ -79,9 +91,9 @@ async def async_get_config_entry_diagnostics(
                 "not implemented until a historical event class is verified"
             ),
             "contact_mapping": (
-                "physical BYMEFBGO values were observed static on the "
-                "development 01946; logical-zone raw values are included "
-                "for read-only investigation"
+                "v0.2.3 adds read-only relation/status-link probes around logical "
+                "SAI zones and physical contact interfaces; entities remain "
+                "unchanged until a live source is verified"
             ),
             "pin_persisted": False,
         },

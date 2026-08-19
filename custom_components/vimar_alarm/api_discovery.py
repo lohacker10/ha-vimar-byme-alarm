@@ -53,6 +53,54 @@ class VimarDiscoveryMixin:
         """Read raw values for logical SAI groups/zones for diagnostics only."""
         return self._select("SELECT ID,NAME,STATUS_ID,CURRENT_VALUE,MIN_VALUE,MAX_VALUE,TYPE,VALUES_TYPE,OPTIONALP FROM DPADD_OBJECT WHERE TYPE='BYMEIDX' AND VALUES_TYPE='CH_SAI' AND STATUS_ID>=0 ORDER BY ID")
 
+    def get_sai_relation_probe(self) -> list[dict[str, str]]:
+        """Read outgoing SAI object relations and child values for diagnostics."""
+        return self._select(
+            "SELECT p.ID AS parent_id,p.NAME AS parent_name,"
+            "r.RELATION_WEB_TIPOLOGY AS relation_type,"
+            "c.ID AS child_id,c.NAME AS child_name,c.STATUS_ID AS child_status_id,"
+            "c.CURRENT_VALUE AS child_current_value,c.MIN_VALUE AS child_min_value,"
+            "c.MAX_VALUE AS child_max_value,c.TYPE AS child_type,"
+            "c.VALUES_TYPE AS child_values_type,c.OPTIONALP AS child_optionalp "
+            "FROM DPADD_OBJECT p "
+            "INNER JOIN DPADD_OBJECT_RELATION r ON p.ID=r.PARENTOBJ_ID "
+            "INNER JOIN DPADD_OBJECT c ON r.CHILDOBJ_ID=c.ID "
+            "WHERE (p.TYPE='BYMEIDX' AND p.VALUES_TYPE='CH_SAI') "
+            "OR (p.NAME='SAIInterfacciaContatti__2In' AND p.VALUES_TYPE='CH_SAI') "
+            "ORDER BY p.ID,r.RELATION_WEB_TIPOLOGY,c.ID"
+        )
+
+    def get_sai_incoming_relation_probe(self) -> list[dict[str, str]]:
+        """Read incoming relations for SAI zones/interfaces for diagnostics."""
+        return self._select(
+            "SELECT c.ID AS child_id,c.NAME AS child_name,"
+            "r.RELATION_WEB_TIPOLOGY AS relation_type,"
+            "p.ID AS parent_id,p.NAME AS parent_name,p.STATUS_ID AS parent_status_id,"
+            "p.CURRENT_VALUE AS parent_current_value,p.MIN_VALUE AS parent_min_value,"
+            "p.MAX_VALUE AS parent_max_value,p.TYPE AS parent_type,"
+            "p.VALUES_TYPE AS parent_values_type,p.OPTIONALP AS parent_optionalp "
+            "FROM DPADD_OBJECT c "
+            "INNER JOIN DPADD_OBJECT_RELATION r ON c.ID=r.CHILDOBJ_ID "
+            "INNER JOIN DPADD_OBJECT p ON r.PARENTOBJ_ID=p.ID "
+            "WHERE (c.TYPE='BYMEIDX' AND c.VALUES_TYPE='CH_SAI') "
+            "OR (c.NAME='SAIInterfacciaContatti__2In' AND c.VALUES_TYPE='CH_SAI') "
+            "ORDER BY c.ID,r.RELATION_WEB_TIPOLOGY,p.ID"
+        )
+
+    def get_sai_status_link_probe(self) -> list[dict[str, str]]:
+        """Read objects whose STATUS_ID points at a SAI zone/interface."""
+        return self._select(
+            "SELECT o.ID,o.NAME,o.STATUS_ID,o.CURRENT_VALUE,o.MIN_VALUE,o.MAX_VALUE,"
+            "o.TYPE,o.VALUES_TYPE,o.OPTIONALP "
+            "FROM DPADD_OBJECT o "
+            "WHERE o.STATUS_ID IN ("
+            "SELECT target.ID FROM DPADD_OBJECT target "
+            "WHERE (target.TYPE='BYMEIDX' AND target.VALUES_TYPE='CH_SAI') "
+            "OR (target.NAME='SAIInterfacciaContatti__2In' "
+            "AND target.VALUES_TYPE='CH_SAI')) "
+            "ORDER BY o.STATUS_ID,o.ID"
+        )
+
     def get_state_snapshot(self, partitions: list[VimarPartition], contact_inputs: list[VimarContactInput]) -> VimarStateSnapshot:
         """Read all alarm and contact current values in one SELECT."""
         ids = [p.status_id for p in partitions]
