@@ -6,7 +6,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -19,32 +19,26 @@ async def async_setup_entry(
     entry: VimarAlarmConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add two generic input sensors after a DB-known module changes on TCP."""
+    """Create two generic input sensors for every DB-known SAI contact module."""
     runtime = entry.runtime_data
-    known_addresses: set[str] = set()
+    addresses = sorted(
+        {
+            str(contact.device_address).upper().zfill(4)
+            for contact in runtime.contact_inputs
+            if contact.device_address
+        }
+    )
 
-    @callback
-    def _add_confirmed_contact(address: str) -> None:
-        if address in known_addresses:
-            return
-        state = runtime.tcp_listener.contact_state(address)
-        if state is None or int(state.get("changes", 0)) < 1:
-            return
-        known_addresses.add(address)
-        async_add_entities(
+    entities: list[VimarTcpContactBinarySensor] = []
+    for address in addresses:
+        entities.extend(
             [
                 VimarTcpContactBinarySensor(entry, address, 1, 0x01),
                 VimarTcpContactBinarySensor(entry, address, 2, 0x02),
             ]
         )
 
-    for address in runtime.tcp_listener.confirmed_contact_addresses():
-        _add_confirmed_contact(address)
-
-    def _on_tcp_contact(address: str, _state: str, _changes: int) -> None:
-        hass.loop.call_soon_threadsafe(_add_confirmed_contact, address)
-
-    entry.async_on_unload(runtime.tcp_listener.add_contact_listener(_on_tcp_contact))
+    async_add_entities(entities)
 
 
 class VimarTcpContactBinarySensor(BinarySensorEntity):

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2
+
+- Create both generic input entities at setup for every DB-discovered SAI two-input contact module.
+- Contact entities no longer require a prior TCP state transition before appearing in Home Assistant.
+- TCP remains the live state source; entities may initially be `unknown` until the first frame for their module is received.
+- Kept two-bit contact decoding from v0.3.1: bit `0x01` = Input 1, bit `0x02` = Input 2.
+- No room-specific names or installation-specific mappings are stored in the public repository.
+- Alarm control behavior and the receive-only TCP transport are unchanged.
+
 ## 0.3.1
 
 - Fixed TCP contact decoding for Vimar SAI 2-input contact interfaces.
