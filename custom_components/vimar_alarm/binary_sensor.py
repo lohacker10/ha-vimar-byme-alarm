@@ -19,7 +19,7 @@ async def async_setup_entry(
     entry: VimarAlarmConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add generic contacts after a DB-known address changes on the TCP bus."""
+    """Add two generic input sensors after a DB-known module changes on TCP."""
     runtime = entry.runtime_data
     known_addresses: set[str] = set()
 
@@ -31,7 +31,12 @@ async def async_setup_entry(
         if state is None or int(state.get("changes", 0)) < 1:
             return
         known_addresses.add(address)
-        async_add_entities([VimarTcpContactBinarySensor(entry, address)])
+        async_add_entities(
+            [
+                VimarTcpContactBinarySensor(entry, address, 1, 0x01),
+                VimarTcpContactBinarySensor(entry, address, 2, 0x02),
+            ]
+        )
 
     for address in runtime.tcp_listener.confirmed_contact_addresses():
         _add_confirmed_contact(address)
@@ -43,7 +48,7 @@ async def async_setup_entry(
 
 
 class VimarTcpContactBinarySensor(BinarySensorEntity):
-    """A DB-known SAI contact whose live state was confirmed over TCP."""
+    """One input bit of a DB-known SAI two-input contact interface."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
@@ -53,12 +58,18 @@ class VimarTcpContactBinarySensor(BinarySensorEntity):
         self,
         entry: VimarAlarmConfigEntry,
         address: str,
+        input_number: int,
+        input_mask: int,
     ) -> None:
         self._entry = entry
         self._address = address.upper()
+        self._input_number = input_number
+        self._input_mask = input_mask
         self._remove_listener = None
-        self._attr_name = f"Contact {self._address}"
-        self._attr_unique_id = f"{entry.entry_id}_tcp_contact_{self._address}"
+        self._attr_name = f"Contact {self._address} Input {input_number}"
+        self._attr_unique_id = (
+            f"{entry.entry_id}_tcp_contact_{self._address}_input_{input_number}"
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="Vimar Alarm",
@@ -90,17 +101,19 @@ class VimarTcpContactBinarySensor(BinarySensorEntity):
         if state is None:
             return None
         raw = str(state.get("state", ""))
-        if raw == "00":
-            return False
-        if raw == "02":
-            return True
-        return None
+        try:
+            raw_value = int(raw, 16)
+        except ValueError:
+            return None
+        return bool(raw_value & self._input_mask)
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         state = self._entry.runtime_data.tcp_listener.contact_state(self._address) or {}
         return {
             "address": self._address,
+            "input": self._input_number,
+            "input_mask": f"0x{self._input_mask:02X}",
             "source": "tcp_45211",
             "raw_state": state.get("state", ""),
             "change_count": state.get("changes", 0),

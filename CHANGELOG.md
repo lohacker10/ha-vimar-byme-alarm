@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed TCP contact decoding for Vimar SAI 2-input contact interfaces.
+- Each confirmed physical contact module now exposes two generic binary sensors: `Contact <address> Input 1` and `Contact <address> Input 2`.
+- TCP contact state is decoded as a two-bit mask: bit `0x01` drives Input 1 and bit `0x02` drives Input 2.
+- Raw TCP state remains available as an entity attribute for diagnostics.
+- No room-specific names or installation-specific mappings are stored in the public repository.
+- Alarm control behavior, PIN validation, TCP receive-only handling, and multi-partition `SYNCDB` sequencing are unchanged.
+
 ## 0.3.0
 
 - Added generic TCP-backed SAI contact binary sensors.
