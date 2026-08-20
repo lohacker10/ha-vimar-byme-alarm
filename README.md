@@ -21,38 +21,47 @@ A standalone Home Assistant custom integration for the **Vimar By-me SAI anti-in
 - ✅ Confirms the real state after every command instead of using optimistic state
 - 🔒 Does **not** store the SAI PIN in the integration configuration
 
-### 📡 New in v0.2: TCP push hints
+### 📡 Passive TCP push
 
-The integration now listens passively on Vimar TCP port `45211`.
+The integration listens passively on Vimar TCP port `45211`.
 
-It never sends application data on that socket. Incoming TCP traffic means only:
+It never sends application data on that socket. TCP is used for local push updates and contact state changes while periodic polling remains a fallback for alarm state refresh.
 
-```text
-something changed on the Vimar bus
-        ↓
-refresh the authoritative Web Server database state
-        ↓
-update Home Assistant
-```
+### 🪟 Contact inputs
 
-The normal polling interval remains as a fallback if the TCP connection is unavailable.
-
-### 🪟 New in v0.2: contact inputs
-
-The integration discovers physical Vimar SAI **2-input contact interfaces** and exposes their raw inputs as `binary_sensor` entities with the `opening` device class.
-
-On the development installation, five 2-input interfaces were discovered, giving up to ten physical input channels.
-
-The full mapping between physical channels and every room/window name has **not** been guessed. The first v0.2 release therefore exposes safe technical names such as:
+The integration discovers physical Vimar SAI **2-input contact interfaces** from the Web Server database and creates two `binary_sensor` entities per interface:
 
 ```text
-Vimar SAI Contact 0010 Input 1
-Vimar SAI Contact 0010 Input 2
+Contact <address> Input 1
+Contact <address> Input 2
 ```
 
-To identify a window, keep the alarm **disarmed**, open and close one window, and observe which entity changes. You can then rename that entity in Home Assistant.
+Contact state is received from the passive TCP stream and decoded as a two-bit mask:
 
-This is also the safe way to identify contacts that are not present in the logical group names, such as additional bathroom windows.
+| Raw state | Input 1 | Input 2 |
+|---|---|---|
+| `00` | closed | closed |
+| `01` | open | closed |
+| `02` | closed | open |
+| `03` | open | open |
+
+The physical address is intentionally kept technical and generic. The integration does **not** store room/window mappings in the repository.
+
+#### Recommended first-time contact mapping
+
+Keep the alarm **disarmed**.
+
+For each physical 2-input module, the safest way to identify the two Home Assistant entities is:
+
+1. Start with the two contacts connected to that module **closed**, when practical.
+2. Open only one window/door and observe which input changes from closed to open.
+3. Close it again and verify the same input returns to closed.
+4. Repeat with the second window/door.
+5. Rename the two entities in Home Assistant after both channels have been verified.
+
+This avoids confusing the initial combined state of a two-input module. If both contacts are already open, the raw module state can be `03`, so both Home Assistant inputs correctly appear open but that state alone does not tell you which physical opening corresponds to Input 1 versus Input 2.
+
+After the channels have been identified, normal open/close changes are reflected independently through the two bit values.
 
 ## 🧠 Verified Vimar protocol
 
@@ -73,28 +82,28 @@ Observed behavior:
 | Read PIN permissions | `partializationgrants` bit mask |
 | Arm | `service-runonelement` → `SETVALUE`, payload `2` |
 | Disarm | `service-runonelement` → `SETVALUE`, payload `1` |
-| Push hint | Receive-only TCP connection to port `45211` |
+| Push/contact stream | Receive-only TCP connection to port `45211` |
 
 The SAI PIN entered in Home Assistant is passed only to the authentication/command request and is discarded after the call.
 
 ## 🏠 Individual vs aggregate alarm panels
 
-Assume the real Vimar installation contains:
+Assume an installation contains two generic partializations:
 
 ```text
-INGR
-GARAGE
+Partition 1
+Partition 2
 ```
 
 Home Assistant creates the two real panels plus one aggregate panel.
 
 ### Individual panel
 
-Arming `GARAGE` changes only the real Vimar `GARAGE` partialization.
+Arming one individual panel changes only that real Vimar partialization.
 
 ### Aggregate panel
 
-The main **Vimar By-me Alarm** entity represents all discovered partializations:
+The main **Alarm** entity represents all discovered partializations:
 
 | Real state | Aggregate HA state |
 |---|---|
@@ -110,13 +119,9 @@ If one command fails after another partialization has already changed, the integ
 
 The integration does **not** currently invent a `triggered` mapping.
 
-Instead, v0.2 diagnostics read the existing Vimar SAI history from `DPADD_BYME_LOG` using `SELECT` only. The diagnostics contain:
+Instead, diagnostics can read existing Vimar SAI history from `DPADD_BYME_LOG` using `SELECT` only. The diagnostics include technical event IDs/types and numeric device/zone references while avoiding user-defined names where possible.
 
-- recent SAI event IDs/types
-- device and zone numeric IDs
-- a historical summary of SAI `MESSAGE` / `EVENT_TYPE` combinations
-
-This lets us look for an alarm that happened naturally in the past and identify its event class without deliberately triggering a noisy siren test.
+This allows historical investigation without deliberately triggering an audible alarm test.
 
 ## 🧩 Why a separate integration?
 
@@ -169,38 +174,29 @@ After Home Assistant restarts:
 
 The **SAI alarm PIN is not configured here**.
 
-## ⬆️ Updating from v0.1
+## ⬆️ Updating
 
 Update the repository through HACS and restart Home Assistant.
 
-Your existing per-partialization alarm entities keep the same unique IDs. v0.2 adds:
+The integration preserves stable unique IDs for existing alarm entities. Contact entities use stable IDs based on the discovered physical address and input number.
 
-- the aggregate alarm entity
-- physical contact binary sensors
-- TCP push handling
-- downloadable diagnostics
-
-Existing v0.1 config entries retain their configured polling interval. New installs default to a 30-second fallback interval because TCP push usually refreshes state much sooner.
-
-## 🧪 Recommended v0.2 validation
+## 🧪 Recommended validation
 
 ### 1. Test TCP push
 
 Keep the Home Assistant page open and arm/disarm from a **physical Vimar keypad** or the original Web Server.
 
-The HA alarm state should normally refresh much faster than the fallback polling interval.
+The HA alarm state should normally refresh faster than the fallback polling interval.
 
 ### 2. Identify contact inputs safely
 
-Keep the alarm **disarmed**.
-
-Open and close one window at a time and observe the new `binary_sensor` entities. Record or rename the channel that changes.
+Keep the alarm **disarmed** and use the first-time contact mapping procedure above. Map one physical opening at a time and verify both open and closed states before renaming an entity.
 
 Do not test tamper inputs and do not arm the alarm for this mapping step.
 
 ### 3. Test the aggregate panel
 
-Use the main **Vimar By-me Alarm** panel:
+Use the main **Alarm** panel:
 
 - arm all partializations with one PIN
 - disarm all with one PIN
@@ -210,7 +206,7 @@ Use the main **Vimar By-me Alarm** panel:
 
 Go to the Vimar By-me Alarm integration page, open the config-entry menu and choose **Download diagnostics**.
 
-Diagnostics redact Web Server host, username and password and contain no stored SAI PIN. The event log deliberately omits user-defined `ZONE_NAME`, `PARTIALIZATION_NAME` and `DEVICE_NAME` fields.
+Diagnostics redact Web Server host, username and password and contain no stored SAI PIN. They deliberately avoid raw TCP payloads and should not contain user-defined partition/zone names in the integration-specific diagnostic sections.
 
 ## 🔐 Security
 
@@ -241,17 +237,17 @@ The SAI PIN remains separate from the Web Server login.
 
 ## 🚧 Current limitations
 
-- 🚨 `triggered` is not mapped yet; v0.2 collects historical evidence instead
-- 🪟 physical contact channel → room/window mapping is initially experimental
+- 🚨 `triggered` is not mapped yet
+- 🪟 room/window names are not inferred automatically; contacts use generic physical address/input entities
 - ⚠️ tamper and fault states are not exposed yet
 - 🧪 firmware versions other than those explicitly tested remain unverified
 
 ## 🗺️ Roadmap
 
-- 🪟 map raw contact inputs to friendly logical zone names after safe field testing
 - 🚨 map `triggered` from verified historical SAI events
 - ⚠️ tamper/fault reporting
 - 🧠 richer SAI event/log support
+- 🪟 optional friendly mapping only if it can be derived generically and safely from protocol/database evidence
 
 ## 🐛 Reporting issues
 
@@ -260,10 +256,10 @@ Please include:
 - Home Assistant version
 - Vimar Web Server model
 - Vimar firmware version
-- relevant partialization/contact channel
+- relevant technical contact address/input if needed
 - Home Assistant diagnostics when useful
 
-Do **not** include real PINs, passwords, cookies, `sessionid`, SOAP secrets, or raw HAR captures.
+Do **not** include real PINs, passwords, cookies, `sessionid`, SOAP secrets, private LAN addresses, user-defined room names when unnecessary, or raw HAR captures.
 
 Issues: <https://github.com/lohacker10/ha-vimar-byme-alarm/issues>
 

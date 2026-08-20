@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.4
+
+- Confirmed the generic two-input TCP bitmask with a full live sequence: `00` = both closed, `01` = Input 1 open, `02` = Input 2 open, `03` = both open.
+- Documented a safer first-time contact mapping procedure: start with both contacts closed when practical, then test one physical opening at a time before renaming entities.
+- Updated the README to describe current v0.3.x behavior instead of the older v0.2 experimental contact model.
+- Removed installation-specific room/partition examples from public documentation and the development handoff.
+- Hardened Home Assistant diagnostics by redacting user-defined/object name fields while preserving technical numeric IDs, physical addresses, raw state values and sanitized TCP contact fields.
+- Web Server credentials remain redacted, the SAI PIN remains transient, raw TCP payloads remain disabled, and TCP remains receive-only.
+
 ## 0.3.3
 
 - Added sanitized two-byte TCP contact diagnostics for DB-discovered SAI contact modules.

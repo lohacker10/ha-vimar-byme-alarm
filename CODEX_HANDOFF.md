@@ -29,6 +29,7 @@ Treat this as alarm/security software.
 - TCP port `45211` is receive-only. Do not send application data to it.
 - Do not implement optimistic alarm state. Re-read the Web Server state after commands.
 - Do not invent alarm/trigger/tamper semantics without captured evidence.
+- Do not store installation-specific room names, private addresses, personal paths or physical-address-to-room mappings in the public repository.
 
 ## Verified Vimar SAI behavior
 
@@ -38,19 +39,12 @@ The Web Server database exposes SAI partializations under:
 
 `_DPAD_VIMAR_SAI_PARTITIONS_CONTAINER`
 
-The test installation has two real partializations:
-
-- `INGR` — partition index 1
-- `GARAGE` — partition index 2
-
 Each partialization has a child object named `state`.
 
 Verified state mapping on firmware 2.11:
 
 - `state = 1` → disarmed
 - `state = 2` → armed
-
-This mapping was captured while GARAGE was manually armed and disarmed and then validated by live Home Assistant tests.
 
 ### SAI PIN authentication
 
@@ -74,68 +68,48 @@ The Web Server UI uses `service-runonelement` on the partialization object itsel
 
 The integration must validate the PIN/grants first and then verify the resulting database state after the command.
 
-## v0.1 validation status
+For multiple partializations, preserve the verified sequencing behavior already implemented: commands are sent in descending partialization index order, every command except the last uses `SYNCDB`, and the final command uses `NO-OPTIONALS`.
 
-The user completed the requested v0.1 live tests successfully:
+## Passive TCP push
 
-- discovery of INGR and GARAGE works
-- both entities survive Home Assistant restart
-- arm/disarm from Home Assistant works
-- correct SAI PIN works
-- incorrect PIN is rejected without changing state
-- state changes made from the physical Vimar side are reflected by polling
-- integration recovers from normal use without reconfiguration
+Use TCP port `45211` only as a passive receive-only stream.
 
-The existing unique IDs of the INGR and GARAGE entities should remain stable across upgrades.
+The integration uses the stream for push refreshes and live contact states. Do not introduce outbound application frames.
 
-## v0.2 design / implementation
+Periodic polling remains a fallback for authoritative alarm state refreshes.
 
-The approved v0.2 direction contains four independent modules.
+## Physical 2-input contact modules
 
-### 1. Passive TCP push trigger
+The Web Server database exposes physical `SAIInterfacciaContatti__2In` interfaces. Each discovered physical module produces two generic Home Assistant binary sensors:
 
-Use TCP port `45211` only as a passive event trigger.
+`Contact <address> Input 1`
 
-Architecture:
+`Contact <address> Input 2`
 
-`TCP recv event -> request coordinator refresh -> authoritative DB SELECT -> update entities`
+Do not hardcode installation-specific physical addresses or room names.
 
-Do not decode a TCP frame directly into alarm state yet. The database remains authoritative.
+### Verified TCP state encoding
 
-Keep periodic polling as fallback. TCP reconnect must be resilient and should never block Home Assistant shutdown.
+For the contact frame format currently parsed by `tcp.py`, the first state byte is a two-bit mask:
 
-### 2. Physical contact inputs as binary sensors
+- `00` → both inputs closed
+- `01` → Input 1 open, Input 2 closed
+- `02` → Input 1 closed, Input 2 open
+- `03` → both inputs open
 
-The diagnostic DB dump shows five physical `SAIInterfacciaContatti__2In` interfaces, each with two feedback channels, so there are up to ten physical contact inputs.
+Input 1 uses mask `0x01`; Input 2 uses mask `0x02`.
 
-Known logical contact names seen in the Web Server DB include:
+The following byte changes with the state and appears to be a frame check/control value. It is retained only as a sanitized diagnostic field and must not be used as contact state unless future evidence requires it.
 
-- `CONTATTI 1 ENTRATA`
-- `CONTATTI CAMERETTA`
-- `CONTATTI 3 CAMERA`
-- `CONTATTI CUCINA`
-- `CONTATTI GARAGE`
+### Contact mapping procedure
 
-The user also has contacts for two bathrooms; those names were not visible in the initial logical-object dump.
+For first-time physical identification, keep the alarm disarmed. When practical, start with both contacts on a two-input module closed, then open/close one physical contact at a time and verify which generic input changes. Repeat for the second contact before renaming entities in Home Assistant.
 
-Therefore physical channels should initially have technical stable names/unique IDs, for example:
+If both contacts start open, the raw module state may already be `03`, which correctly marks both inputs open but does not identify which physical opening is Input 1 versus Input 2.
 
-`Vimar SAI Contact <address> Input <n>`
+## Aggregate alarm entity
 
-The user can identify the two bathroom channels safely by opening/closing one window at a time while the alarm is disarmed.
-
-Current expected raw mapping is:
-
-- `0` → closed/rest
-- `1` → open
-
-Only `0` has already been observed at rest. Confirm `1` from a real open/close test before treating it as universally verified.
-
-Use Home Assistant `binary_sensor` with an opening/window-appropriate device class.
-
-### 3. Aggregate alarm entity
-
-In addition to INGR and GARAGE, expose a third aggregate alarm entity representing all real partializations.
+Expose one aggregate alarm entity representing all discovered real partializations.
 
 State semantics:
 
@@ -151,35 +125,17 @@ Command behavior:
 - verify all real states afterward
 - do not automatically rollback if a later partition command fails; expose the actual mixed state and return an error
 
-This mirrors the Vimar Web Server/tastierino user experience where the user enters one PIN and then selects one, several, or all partializations.
-
-### 4. Read-only SAI history diagnostics
+## Read-only SAI history diagnostics
 
 The Web Server UI reads the SAI history table:
 
 `DPADD_BYME_LOG`
 
-Useful fields include:
+Use read-only history diagnostics to investigate old intrusion/alarm events before asking for a new alarm event.
 
-- `TIMESTAMP`
-- `ZONE_ID`
-- `ZONE_NUMBER`
-- `ZONE_NAME`
-- `PARTIALIZATION_ID`
-- `PARTIALIZATION_NUMBER`
-- `PARTIALIZATION_NAME`
-- `DEVICE_ID`
-- `DEVICE_ADDRESS`
-- `DEVICE_NAME`
-- `MESSAGE`
-- `EVENT_TYPE`
-- `CATEGORY`
+Do not map Home Assistant `triggered` until a real historical/captured event gives enough evidence to identify exact alarm-start and alarm-clear semantics.
 
-Use read-only history diagnostics to look for old intrusion/alarm events before asking the user to generate a new alarm.
-
-The user explicitly does not want to deliberately trigger the audible sirens.
-
-Do not map Home Assistant `triggered` until a real historical/captured event gives enough evidence to identify the exact alarm-start and alarm-clear semantics.
+Diagnostics should prefer technical numeric IDs/addresses and omit user-defined names wherever those names are not required for debugging.
 
 ## Triggered state strategy
 
@@ -201,29 +157,16 @@ The integration is inspired by and derives transport/TLS ideas from:
 
 The project remains GPL-3.0 compatible. Preserve `LICENSE` and `NOTICE` attribution.
 
-Important upstream lesson: current `home-assistant-vimar` recognizes `CH_SAI` objects but classifies them as unsupported. This integration intentionally supports only the alarm subset rather than forking/replacing all Vimar functionality.
-
 ## Home Assistant design principles
 
-- Prefer `DataUpdateCoordinator` for authoritative state refreshes.
+- Prefer `DataUpdateCoordinator` for authoritative alarm state refreshes.
 - Keep the general integration local-only.
 - Preserve stable entity unique IDs.
 - Use config flow; do not ask for the SAI PIN during setup.
 - Use Home Assistant alarm code handling so the PIN is supplied only with arm/disarm service calls.
-- Diagnostics must redact secrets.
+- Diagnostics must redact secrets and avoid unnecessary installation-specific names.
 - Keep Italian and English translations.
 - HACS compatibility must remain intact.
-
-## Testing priorities after v0.2 is installed
-
-1. Confirm TCP listener connects and physical keypad arm/disarm produces near-immediate HA refresh.
-2. With the alarm disarmed, open/close one known window and identify which physical binary sensor toggles.
-3. Map all contact channels, including both bathrooms, without arming the alarm.
-4. Test aggregate entity:
-   - GARAGE only armed → aggregate `armed_custom_bypass`
-   - INGR + GARAGE armed via aggregate → aggregate `armed_away`
-   - aggregate disarm → both return to `disarmed`
-5. Download sanitized Home Assistant diagnostics and inspect historical SAI events for possible `triggered` mapping.
 
 ## Do not expose private data
 
@@ -236,9 +179,10 @@ No real values for the following belong in this repository:
 - cookies
 - raw unsanitized HAR/network captures
 - personal filesystem paths
+- installation-specific room/window names or address-to-room mappings
 
 ## First task for Codex
 
 Read this file, `README.md`, `custom_components/vimar_alarm/api.py`, `coordinator.py`, `alarm_control_panel.py`, `binary_sensor.py`, `tcp.py`, and `diagnostics.py` before modifying anything.
 
-Then run repository-level validation and review the v0.2 implementation for Home Assistant API correctness, concurrency/shutdown safety, secret handling, and HACS/hassfest compatibility. Preserve the verified Vimar protocol behavior above unless new captured evidence contradicts it.
+Then run repository-level validation and review the implementation for Home Assistant API correctness, concurrency/shutdown safety, secret handling, and HACS/hassfest compatibility. Preserve verified Vimar protocol behavior unless new captured evidence contradicts it.

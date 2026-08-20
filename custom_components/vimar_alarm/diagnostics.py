@@ -13,11 +13,28 @@ from . import VimarAlarmConfigEntry
 _TO_REDACT = {CONF_HOST, CONF_USERNAME, CONF_PASSWORD}
 
 
+def _redact_user_names(value: Any) -> Any:
+    """Remove user-defined/object names while retaining technical IDs and values."""
+    if isinstance(value, list):
+        return [_redact_user_names(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    redacted: dict[str, Any] = {}
+    for key, item in value.items():
+        normalized = str(key).lower()
+        if normalized == "name" or normalized.endswith("_name"):
+            redacted[key] = "**REDACTED**"
+        else:
+            redacted[key] = _redact_user_names(item)
+    return redacted
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: VimarAlarmConfigEntry,
 ) -> dict[str, Any]:
-    """Return PIN-free, credential-redacted SAI diagnostics."""
+    """Return PIN-free, credential- and user-name-redacted SAI diagnostics."""
     runtime = entry.runtime_data
 
     recent_events = await hass.async_add_executor_job(
@@ -42,12 +59,11 @@ async def async_get_config_entry_diagnostics(
         runtime.api.get_sai_status_link_probe
     )
 
-    return {
+    diagnostics = {
         "entry_data": async_redact_data(dict(entry.data), _TO_REDACT),
         "partitions": [
             {
                 "object_id": partition.object_id,
-                "name": partition.name,
                 "index_id": partition.index_id,
                 "status_id": partition.status_id,
                 "raw_state": runtime.coordinator.data.partition_states.get(
@@ -59,7 +75,6 @@ async def async_get_config_entry_diagnostics(
         "logical_zones": [
             {
                 "object_id": zone.object_id,
-                "name": zone.name,
                 "index_id": zone.index_id,
                 "partition_object_id": zone.partition_object_id,
             }
@@ -82,7 +97,6 @@ async def async_get_config_entry_diagnostics(
             for contact in runtime.contact_inputs
         ],
         "tcp_push": runtime.tcp_listener.diagnostics(),
-        # Deliberately omit ZONE_NAME/PARTIALIZATION_NAME/DEVICE_NAME from logs.
         "recent_sai_events": recent_events,
         "nonstandard_sai_events": nonstandard_events,
         "sai_event_summary": event_summary,
@@ -91,10 +105,12 @@ async def async_get_config_entry_diagnostics(
                 "not implemented until a historical event class is verified"
             ),
             "contact_mapping": (
-                "v0.2.3 adds read-only relation/status-link probes around logical "
-                "SAI zones and physical contact interfaces; entities remain "
-                "unchanged until a live source is verified"
+                "TCP state byte is a verified two-bit mask: 0x01 = Input 1, "
+                "0x02 = Input 2"
             ),
             "pin_persisted": False,
+            "user_defined_names_redacted": True,
         },
     }
+
+    return _redact_user_names(diagnostics)
