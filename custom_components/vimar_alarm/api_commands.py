@@ -199,11 +199,10 @@ class VimarCommandsMixin:
     def get_nonstandard_sai_events(
         self, limit: int = 200
     ) -> list[dict[str, str]]:
-        """Read historical SAI rows whose event class is not normal 0/1.
+        """Read historical SAI rows whose event class is not 0/1.
 
-        These rows are useful for identifying alarm, tamper, fault, and restore
-        semantics without deliberately generating an alarm. Display-name
-        columns are intentionally omitted from diagnostics.
+        This legacy diagnostic view is retained for compatibility. No semantic
+        meaning is inferred from EVENT_TYPE values by the integration.
         """
         safe_limit = min(max(int(limit), 1), 500)
         return self._select(
@@ -213,6 +212,42 @@ class VimarCommandsMixin:
             "FROM DPADD_BYME_LOG "
             "WHERE CATEGORY='SAI' AND EVENT_TYPE NOT IN (0,1) "
             f"ORDER BY TIMESTAMP DESC LIMIT 0,{safe_limit}"
+        )
+
+    def get_sai_alarm_history_probe(
+        self, limit: int = 500
+    ) -> list[dict[str, str]]:
+        """Return a deep read-only SAI timeline without assigning semantics.
+
+        All SAI EVENT_TYPE values are retained because alarm/tamper/restore
+        meanings have not yet been verified. Display-name columns are omitted.
+        """
+        safe_limit = min(max(int(limit), 1), 500)
+        return self._select(
+            "SELECT ID,TIMESTAMP,ZONE_ID,ZONE_NUMBER,"
+            "PARTIALIZATION_ID,PARTIALIZATION_NUMBER,"
+            "DEVICE_ID,DEVICE_ADDRESS,MESSAGE,EVENT_TYPE,CATEGORY "
+            "FROM DPADD_BYME_LOG "
+            "WHERE CATEGORY='SAI' "
+            f"ORDER BY TIMESTAMP DESC,ID DESC LIMIT 0,{safe_limit}"
+        )
+
+    def get_sai_event_context_summary(self) -> list[dict[str, str]]:
+        """Summarize all historical SAI events by technical context.
+
+        The aggregation spans the full log instead of only the newest rows, so
+        rare older events remain visible without exporting user-defined names.
+        """
+        return self._select(
+            "SELECT EVENT_TYPE,MESSAGE,ZONE_ID,ZONE_NUMBER,"
+            "PARTIALIZATION_ID,PARTIALIZATION_NUMBER,DEVICE_ID,DEVICE_ADDRESS,"
+            "COUNT(*) AS event_count,MIN(TIMESTAMP) AS first_timestamp,"
+            "MAX(TIMESTAMP) AS last_timestamp "
+            "FROM DPADD_BYME_LOG "
+            "WHERE CATEGORY='SAI' "
+            "GROUP BY EVENT_TYPE,MESSAGE,ZONE_ID,ZONE_NUMBER,"
+            "PARTIALIZATION_ID,PARTIALIZATION_NUMBER,DEVICE_ID,DEVICE_ADDRESS "
+            "ORDER BY EVENT_TYPE,MESSAGE,ZONE_ID,DEVICE_ID"
         )
 
     def get_sai_event_summary(self) -> list[dict[str, str]]:

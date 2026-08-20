@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+- Added a deep read-only `sai_alarm_history_probe` over up to 500 SAI rows from `DPADD_BYME_LOG`, retaining every `EVENT_TYPE` because alarm/tamper/restore semantics are still unverified.
+- Added `sai_event_context_summary`, an all-history aggregation by event type, message, zone, partialization and device context so rare older alarm-related events remain visible even when they fall outside the newest 500 rows.
+- Kept the existing current-state probes and legacy recent/nonstandard event views for comparison.
+- Diagnostics continue to omit user-defined display-name columns and redact credentials; the SAI PIN remains transient.
+- No `triggered`, tamper, fault, restore, or alarm-memory semantics are assigned yet.
+- No changes to arm/disarm behavior, multi-partition `SYNCDB` sequencing, contact decoding, database write policy, or TCP receive-only behavior.
+
 ## 0.4.0
 
 - Added a bounded, read-only inventory of SAI-related `DPADD_OBJECT` current-state candidates for triggered/tamper/fault investigation.

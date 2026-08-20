@@ -43,6 +43,12 @@ async def async_get_config_entry_diagnostics(
     nonstandard_events = await hass.async_add_executor_job(
         runtime.api.get_nonstandard_sai_events, 200
     )
+    sai_alarm_history_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_alarm_history_probe, 500
+    )
+    sai_event_context_summary = await hass.async_add_executor_job(
+        runtime.api.get_sai_event_context_summary
+    )
     event_summary = await hass.async_add_executor_job(
         runtime.api.get_sai_event_summary
     )
@@ -107,11 +113,21 @@ async def async_get_config_entry_diagnostics(
         "tcp_push": runtime.tcp_listener.diagnostics(),
         "recent_sai_events": recent_events,
         "nonstandard_sai_events": nonstandard_events,
+        "sai_alarm_history_probe": sai_alarm_history_probe,
+        "sai_event_context_summary": sai_event_context_summary,
         "sai_event_summary": event_summary,
         "notes": {
-            "diagnostic_release": "0.4.0",
+            "diagnostic_release": "0.4.1",
             "triggered_mapping": (
                 "not implemented until alarm-start and alarm-clear semantics are verified"
+            ),
+            "sai_alarm_history_probe": (
+                "up to 500 SAI log rows from DPADD_BYME_LOG, newest first; "
+                "EVENT_TYPE meanings are intentionally not assigned"
+            ),
+            "sai_event_context_summary": (
+                "all-history grouping of SAI events by technical class, zone, "
+                "partition and device context"
             ),
             "sai_current_state_probe": (
                 "read-only bounded inventory of SAI-related CURRENT_VALUE candidates; "
@@ -120,13 +136,6 @@ async def async_get_config_entry_diagnostics(
             "sai_status_target_probe": (
                 "read-only current values of STATUS_ID targets referenced by SAI objects"
             ),
-            "recommended_walk_test_snapshots": [
-                "A_baseline_disarmed",
-                "B_walk_test_active_contact_closed",
-                "C_walk_test_contact_open",
-                "D_walk_test_contact_closed_again",
-                "E_after_walk_test_exit",
-            ],
             "contact_mapping": (
                 "TCP state byte is a verified two-bit mask: 0x01 = Input 1, "
                 "0x02 = Input 2"
