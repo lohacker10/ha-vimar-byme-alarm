@@ -53,6 +53,34 @@ class VimarDiscoveryMixin:
         """Read raw values for logical SAI groups/zones for diagnostics only."""
         return self._select("SELECT ID,NAME,STATUS_ID,CURRENT_VALUE,MIN_VALUE,MAX_VALUE,TYPE,VALUES_TYPE,OPTIONALP FROM DPADD_OBJECT WHERE TYPE='BYMEIDX' AND VALUES_TYPE='CH_SAI' AND STATUS_ID>=0 ORDER BY ID")
 
+    def get_sai_current_state_probe(self) -> list[dict[str, str]]:
+        """Read a bounded inventory of SAI-related current-value candidates.
+
+        This probe deliberately omits object names. It does not assign alarm,
+        tamper, fault, restore, or memory semantics to any value.
+        """
+        return self._select(
+            "SELECT ID,STATUS_ID,CURRENT_VALUE,MIN_VALUE,MAX_VALUE,TYPE,VALUES_TYPE,OPTIONALP "
+            "FROM DPADD_OBJECT "
+            "WHERE VALUES_TYPE LIKE 'CH_SAI%' OR TYPE LIKE '%SAI%' OR NAME LIKE 'SAI%' "
+            "ORDER BY ID LIMIT 0,500"
+        )
+
+    def get_sai_status_target_probe(self) -> list[dict[str, str]]:
+        """Read current values of STATUS_ID targets referenced by SAI objects."""
+        return self._select(
+            "SELECT source.ID AS source_id,source.STATUS_ID AS status_id,"
+            "status.CURRENT_VALUE AS status_current_value,"
+            "status.MIN_VALUE AS status_min_value,status.MAX_VALUE AS status_max_value,"
+            "status.TYPE AS status_type,status.VALUES_TYPE AS status_values_type,"
+            "status.OPTIONALP AS status_optionalp "
+            "FROM DPADD_OBJECT source "
+            "INNER JOIN DPADD_OBJECT status ON source.STATUS_ID=status.ID "
+            "WHERE source.STATUS_ID>=0 AND (source.VALUES_TYPE LIKE 'CH_SAI%' "
+            "OR source.TYPE LIKE '%SAI%' OR source.NAME LIKE 'SAI%') "
+            "ORDER BY source.ID LIMIT 0,500"
+        )
+
     def get_sai_relation_probe(self) -> list[dict[str, str]]:
         """Read outgoing SAI object relations and child values for diagnostics."""
         return self._select(
