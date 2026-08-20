@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Added generic TCP-backed SAI contact binary sensors.
+- A contact entity is created only after a DB-known physical contact address shows a real TCP state transition.
+- Contact entities use generic names such as `Contact 0029`; no room-specific mapping is stored in the public repository.
+- Contact state mapping uses verified TCP values `00 = closed` and `02 = open`; raw state remains available as an entity attribute.
+- Alarm and contact entities now share one Home Assistant device named `Vimar Alarm`.
+- Alarm entity display names are now `Alarm`, `Alarm <partialization>` without the previous `Vimar By-me` prefix.
+- Existing alarm control behavior, PIN validation, TCP push, and the validated multi-partition `SYNCDB` sequence are unchanged.
+- The TCP socket remains receive-only and raw payloads are never exposed in diagnostics.
+
 ## 0.2.4
 
 - Added passive TCP contact diagnostics parser.

@@ -1,4 +1,4 @@
-"""Experimental raw SAI contact inputs for Vimar By-me Alarm."""
+"""TCP-backed generic SAI contact sensors."""
 
 from __future__ import annotations
 
@@ -6,15 +6,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import VimarAlarmConfigEntry
-from .api import VimarContactInput
 from .const import DOMAIN
-from .coordinator import VimarAlarmCoordinator
 
 
 async def async_setup_entry(
@@ -22,75 +19,90 @@ async def async_setup_entry(
     entry: VimarAlarmConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create one binary sensor for each physical SAI contact input."""
+    """Add generic contacts after a DB-known address changes on the TCP bus."""
     runtime = entry.runtime_data
-    async_add_entities(
-        VimarRawContactBinarySensor(runtime.coordinator, entry, contact)
-        for contact in runtime.contact_inputs
-    )
+    known_addresses: set[str] = set()
+
+    @callback
+    def _add_confirmed_contact(address: str) -> None:
+        if address in known_addresses:
+            return
+        state = runtime.tcp_listener.contact_state(address)
+        if state is None or int(state.get("changes", 0)) < 1:
+            return
+        known_addresses.add(address)
+        async_add_entities([VimarTcpContactBinarySensor(entry, address)])
+
+    for address in runtime.tcp_listener.confirmed_contact_addresses():
+        _add_confirmed_contact(address)
+
+    def _on_tcp_contact(address: str, _state: str, _changes: int) -> None:
+        hass.loop.call_soon_threadsafe(_add_confirmed_contact, address)
+
+    entry.async_on_unload(runtime.tcp_listener.add_contact_listener(_on_tcp_contact))
 
 
-class VimarRawContactBinarySensor(
-    CoordinatorEntity[VimarAlarmCoordinator], BinarySensorEntity
-):
-    """Raw input of a Vimar SAI two-input contact interface.
+class VimarTcpContactBinarySensor(BinarySensorEntity):
+    """A DB-known SAI contact whose live state was confirmed over TCP."""
 
-    The v0.2 discovery deliberately uses physical input names because the supplied
-    firmware dump does not contain a verified mapping for every room/window name.
-    Opening/closing windows while the alarm is DISARMED can be used to identify
-    and rename the entities safely in Home Assistant.
-    """
-
-    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_has_entity_name = False
     _attr_device_class = BinarySensorDeviceClass.OPENING
 
     def __init__(
         self,
-        coordinator: VimarAlarmCoordinator,
         entry: VimarAlarmConfigEntry,
-        contact: VimarContactInput,
+        address: str,
     ) -> None:
-        super().__init__(coordinator)
-        self.contact = contact
         self._entry = entry
-        self._attr_name = f"Input {contact.input_number}"
-        self._attr_unique_id = (
-            f"{entry.data['host']}_sai_contact_"
-            f"{contact.interface_object_id}_{contact.channel_object_id}"
-        )
+        self._address = address.upper()
+        self._remove_listener = None
+        self._attr_name = f"Contact {self._address}"
+        self._attr_unique_id = f"{entry.entry_id}_tcp_contact_{self._address}"
         self._attr_device_info = DeviceInfo(
-            identifiers={
-                (DOMAIN, f"{entry.entry_id}_contact_{contact.interface_object_id}")
-            },
-            name=f"Vimar SAI Contact {contact.device_address}",
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Vimar Alarm",
             manufacturer="Vimar",
-            model="SAI 2-input contact interface",
-            via_device=(DOMAIN, entry.entry_id),
+            model="01946 By-me Web Server",
+            configuration_url=f"https://{entry.data['host']}",
         )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        def _on_contact(address: str, _state: str, _changes: int) -> None:
+            if address == self._address:
+                self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
+
+        self._remove_listener = (
+            self._entry.runtime_data.tcp_listener.add_contact_listener(_on_contact)
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
 
     @property
     def is_on(self) -> bool | None:
-        """0 was observed with all tested contacts at rest/closed.
-
-        Only exact 0/1 values are exposed. Anything else remains unknown rather
-        than guessing a security-relevant contact state.
-        """
-        raw = self.coordinator.data.contact_states.get(self.contact.channel_object_id)
-        if raw == "0":
+        state = self._entry.runtime_data.tcp_listener.contact_state(self._address)
+        if state is None:
+            return None
+        raw = str(state.get("state", ""))
+        if raw == "00":
             return False
-        if raw == "1":
+        if raw == "02":
             return True
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, int | str]:
+    def extra_state_attributes(self) -> dict[str, object]:
+        state = self._entry.runtime_data.tcp_listener.contact_state(self._address) or {}
         return {
-            "vimar_interface_object_id": self.contact.interface_object_id,
-            "vimar_channel_object_id": self.contact.channel_object_id,
-            "vimar_device_address": self.contact.device_address,
-            "vimar_input_number": self.contact.input_number,
-            "vimar_raw_state": self.coordinator.data.contact_states.get(
-                self.contact.channel_object_id, ""
-            ),
-            "mapping_status": "experimental",
+            "address": self._address,
+            "source": "tcp_45211",
+            "raw_state": state.get("state", ""),
+            "change_count": state.get("changes", 0),
+            "last_seen": state.get("last_seen"),
         }

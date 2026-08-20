@@ -48,7 +48,7 @@ class VimarAlarmBase(CoordinatorEntity[VimarAlarmCoordinator], AlarmControlPanel
     _attr_code_format = CodeFormat.NUMBER
     _attr_code_arm_required = True
     _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(
         self,
@@ -59,13 +59,18 @@ class VimarAlarmBase(CoordinatorEntity[VimarAlarmCoordinator], AlarmControlPanel
         self._entry = entry
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name="Vimar By-me Alarm",
+            name="Vimar Alarm",
             manufacturer="Vimar",
             model="01946 By-me Web Server",
             configuration_url=f"https://{entry.data['host']}",
         )
 
-    async def _async_execute(self, partitions: list[VimarPartition], armed: bool, code: str | None) -> None:
+    async def _async_execute(
+        self,
+        partitions: list[VimarPartition],
+        armed: bool,
+        code: str | None,
+    ) -> None:
         try:
             await self.hass.async_add_executor_job(
                 lambda: self._entry.runtime_data.api.set_multiple_partition_states(
@@ -83,10 +88,8 @@ class VimarAlarmBase(CoordinatorEntity[VimarAlarmCoordinator], AlarmControlPanel
         except VimarAlarmEnrollmentError as err:
             raise HomeAssistantError("Enrollment SAI Vimar non completato") from err
         except VimarAlarmCommandError as err:
-            # No rollback: expose the real partial state after the refresh.
             await self.coordinator.async_request_refresh()
             raise HomeAssistantError(str(err)) from err
-
         await self.coordinator.async_request_refresh()
 
 
@@ -101,8 +104,10 @@ class VimarPartitionAlarm(VimarAlarmBase):
     ) -> None:
         super().__init__(coordinator, entry)
         self.partition = partition
-        self._attr_name = partition.name
-        self._attr_unique_id = f"{entry.data['host']}_sai_partition_{partition.object_id}"
+        self._attr_name = f"Alarm {partition.name}"
+        self._attr_unique_id = (
+            f"{entry.data['host']}_sai_partition_{partition.object_id}"
+        )
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
@@ -140,8 +145,7 @@ class VimarAllPartitionsAlarm(VimarAlarmBase):
         entry: VimarAlarmConfigEntry,
     ) -> None:
         super().__init__(coordinator, entry)
-        # Name None makes this the main entity of the Vimar By-me Alarm device.
-        self._attr_name = None
+        self._attr_name = "Alarm"
         self._attr_unique_id = f"{entry.data['host']}_sai_all_partitions"
 
     @property
@@ -150,7 +154,9 @@ class VimarAllPartitionsAlarm(VimarAlarmBase):
             self.coordinator.data.partition_states.get(partition.object_id)
             for partition in self._entry.runtime_data.partitions
         ]
-        if not states or any(state not in {STATE_DISARMED, STATE_ARMED} for state in states):
+        if not states or any(
+            state not in {STATE_DISARMED, STATE_ARMED} for state in states
+        ):
             return None
         if all(state == STATE_DISARMED for state in states):
             return AlarmControlPanelState.DISARMED

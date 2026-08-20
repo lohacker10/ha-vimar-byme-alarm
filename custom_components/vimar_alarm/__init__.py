@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_TIMEOUT, CONF_USERNAME
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_TIMEOUT,
+    CONF_USERNAME,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
@@ -44,7 +50,10 @@ class VimarAlarmRuntime:
 type VimarAlarmConfigEntry = ConfigEntry[VimarAlarmRuntime]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: VimarAlarmConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: VimarAlarmConfigEntry,
+) -> bool:
     api = VimarAlarmApi(
         host=entry.data[CONF_HOST],
         username=entry.data[CONF_USERNAME],
@@ -74,14 +83,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: VimarAlarmConfigEntry) -
     )
     await coordinator.async_config_entry_first_refresh()
 
-    # Thread -> HA event loop. TCP is only a hint; state comes from the DB refresh.
     def on_tcp_data() -> None:
         hass.loop.call_soon_threadsafe(coordinator.async_push_hint)
 
+    contact_addresses = {
+        contact.device_address
+        for contact in contact_inputs
+        if contact.device_address
+    }
     tcp_listener = VimarTcpListener(
         entry.data[CONF_HOST],
         DEFAULT_TCP_PORT,
         on_tcp_data,
+        contact_addresses=contact_addresses,
     )
 
     entry.runtime_data = VimarAlarmRuntime(
@@ -98,6 +112,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: VimarAlarmConfigEntry) -
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: VimarAlarmConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant,
+    entry: VimarAlarmConfigEntry,
+) -> bool:
     await hass.async_add_executor_job(entry.runtime_data.tcp_listener.stop)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
