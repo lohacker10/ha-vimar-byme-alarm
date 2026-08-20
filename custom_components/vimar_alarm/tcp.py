@@ -15,7 +15,7 @@ from typing import Callable, Iterable
 
 
 _CONTACT_FRAME = re.compile(
-    rb"B4([0-9A-Fa-f]{4})0A02E20040([0-9A-Fa-f]{2})[0-9A-Fa-f]{2}"
+    rb"B4([0-9A-Fa-f]{4})0A02E20040([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})"
 )
 
 
@@ -122,10 +122,17 @@ class VimarTcpListener:
                 address = match.group(1).decode("ascii").upper()
                 if address not in self._contact_addresses:
                     continue
-                state = match.group(2).decode("ascii").upper()
+
+                byte_1 = match.group(2).decode("ascii").upper()
+                byte_2 = match.group(3).decode("ascii").upper()
                 previous_record = self._contact.get(address)
-                previous_state = (
-                    str(previous_record["state"])
+                previous_byte_1 = (
+                    str(previous_record.get("byte_1", previous_record.get("state", "")))
+                    if previous_record is not None
+                    else None
+                )
+                previous_byte_2 = (
+                    str(previous_record.get("byte_2", ""))
                     if previous_record is not None
                     else None
                 )
@@ -134,23 +141,35 @@ class VimarTcpListener:
                     if previous_record is not None
                     else 0
                 )
-                if previous_state is not None and previous_state != state:
+                pair_changed = (
+                    previous_record is not None
+                    and (previous_byte_1 != byte_1 or previous_byte_2 != byte_2)
+                )
+                if pair_changed:
                     changes += 1
+
                 self._contact[address] = {
-                    "state": state,
+                    "state": byte_1,
+                    "byte_1": byte_1,
+                    "byte_2": byte_2,
                     "changes": changes,
                     "last_seen": now,
                 }
-                if previous_state is not None and previous_state != state:
+
+                if pair_changed:
                     self._changes.append(
                         {
                             "address": address,
-                            "state": state,
+                            "state": byte_1,
+                            "byte_1": byte_1,
+                            "byte_2": byte_2,
+                            "previous_byte_1": previous_byte_1,
+                            "previous_byte_2": previous_byte_2,
                             "changes": changes,
                             "at": now,
                         }
                     )
-                    notifications.append((address, state, changes))
+                    notifications.append((address, byte_1, changes))
             listeners = tuple(self._contact_listeners)
 
         self._tail = stream[-19:]
@@ -217,6 +236,7 @@ class VimarTcpListener:
             "last_error": self.stats.last_error,
             "contact_tcp_probe": {
                 "raw_payload_retained": False,
+                "diagnostic_fields": ["address", "byte_1", "byte_2", "timestamp"],
                 "allowed_addresses": sorted(self._contact_addresses),
                 "last_by_address": contact,
                 "transitions": changes,

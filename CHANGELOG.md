@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+- Added sanitized two-byte TCP contact diagnostics for DB-discovered SAI contact modules.
+- Diagnostics now retain only address, byte 1, byte 2 and timestamps; raw TCP payloads remain disabled.
+- Transition tracking now detects changes in either of the two parsed bytes.
+- Existing binary-sensor behavior remains unchanged in this diagnostic release.
+- No installation-specific room mapping is stored in the public repository.
+
 ## 0.3.2
 
 - Create both generic input entities at setup for every DB-discovered SAI two-input contact module.
