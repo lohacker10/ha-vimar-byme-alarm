@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Added a bounded, read-only inventory of SAI-related `DPADD_OBJECT` current-state candidates for triggered/tamper/fault investigation.
+- Added a read-only probe for current values of `STATUS_ID` targets referenced by SAI objects.
+- Diagnostics now include explicit A/B/C/D/E Walk-test snapshot labels to make before/during/after comparisons reproducible.
+- No `triggered`, tamper, fault, restore, or alarm-memory semantics are assigned yet; the release is diagnostic only.
+- No changes to arm/disarm behavior, PIN handling, multi-partition `SYNCDB` sequencing, contact decoding, or TCP receive-only behavior.
+- Database access remains guarded as `SELECT`-only; user-defined names and Web Server credentials remain redacted from diagnostics.
+
 ## 0.3.4
 
 - Confirmed the generic two-input TCP bitmask with a full live sequence: `00` = both closed, `01` = Input 1 open, `02` = Input 2 open, `03` = both open.
