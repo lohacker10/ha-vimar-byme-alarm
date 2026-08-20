@@ -22,7 +22,7 @@ from .api import (
     VimarAlarmPermissionError,
     VimarPartition,
 )
-from .const import DOMAIN, STATE_ARMED, STATE_DISARMED
+from .const import DOMAIN, INTRUSION_EVENT_TYPES, STATE_ARMED, STATE_DISARMED
 from .coordinator import VimarAlarmCoordinator
 
 
@@ -111,6 +111,8 @@ class VimarPartitionAlarm(VimarAlarmBase):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
+        if self.coordinator.is_partition_triggered(self.partition.object_id):
+            return AlarmControlPanelState.TRIGGERED
         value = self.coordinator.data.partition_states.get(self.partition.object_id)
         if value == STATE_DISARMED:
             return AlarmControlPanelState.DISARMED
@@ -119,7 +121,7 @@ class VimarPartitionAlarm(VimarAlarmBase):
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, int | str]:
+    def extra_state_attributes(self) -> dict[str, object]:
         return {
             "vimar_object_id": self.partition.object_id,
             "vimar_status_id": self.partition.status_id,
@@ -127,6 +129,10 @@ class VimarPartitionAlarm(VimarAlarmBase):
             "vimar_raw_state": self.coordinator.data.partition_states.get(
                 self.partition.object_id, ""
             ),
+            "vimar_intrusion_latched": self.coordinator.is_partition_triggered(
+                self.partition.object_id
+            ),
+            "vimar_intrusion_event_types": sorted(INTRUSION_EVENT_TYPES),
         }
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
@@ -150,6 +156,8 @@ class VimarAllPartitionsAlarm(VimarAlarmBase):
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
+        if self.coordinator.triggered_partitions:
+            return AlarmControlPanelState.TRIGGERED
         states = [
             self.coordinator.data.partition_states.get(partition.object_id)
             for partition in self._entry.runtime_data.partitions
@@ -173,6 +181,10 @@ class VimarAllPartitionsAlarm(VimarAlarmBase):
                 )
                 for partition in self._entry.runtime_data.partitions
             },
+            "triggered_partition_object_ids": sorted(
+                self.coordinator.triggered_partitions
+            ),
+            "vimar_intrusion_event_types": sorted(INTRUSION_EVENT_TYPES),
             "tcp_push_connected": self._entry.runtime_data.tcp_listener.stats.connected,
         }
 
