@@ -49,6 +49,12 @@ async def async_get_config_entry_diagnostics(
     logical_zone_values = await hass.async_add_executor_job(
         runtime.api.get_logical_zone_values
     )
+    sai_current_state_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_current_state_probe
+    )
+    sai_status_target_probe = await hass.async_add_executor_job(
+        runtime.api.get_sai_status_target_probe
+    )
     sai_relation_probe = await hass.async_add_executor_job(
         runtime.api.get_sai_relation_probe
     )
@@ -81,6 +87,8 @@ async def async_get_config_entry_diagnostics(
             for zone in runtime.logical_zones
         ],
         "logical_zone_values": logical_zone_values,
+        "sai_current_state_probe": sai_current_state_probe,
+        "sai_status_target_probe": sai_status_target_probe,
         "sai_relation_probe": sai_relation_probe,
         "sai_incoming_relation_probe": sai_incoming_relation_probe,
         "sai_status_link_probe": sai_status_link_probe,
@@ -101,14 +109,31 @@ async def async_get_config_entry_diagnostics(
         "nonstandard_sai_events": nonstandard_events,
         "sai_event_summary": event_summary,
         "notes": {
+            "diagnostic_release": "0.4.0",
             "triggered_mapping": (
-                "not implemented until a historical event class is verified"
+                "not implemented until alarm-start and alarm-clear semantics are verified"
             ),
+            "sai_current_state_probe": (
+                "read-only bounded inventory of SAI-related CURRENT_VALUE candidates; "
+                "no alarm/tamper/fault semantics are assigned"
+            ),
+            "sai_status_target_probe": (
+                "read-only current values of STATUS_ID targets referenced by SAI objects"
+            ),
+            "recommended_walk_test_snapshots": [
+                "A_baseline_disarmed",
+                "B_walk_test_active_contact_closed",
+                "C_walk_test_contact_open",
+                "D_walk_test_contact_closed_again",
+                "E_after_walk_test_exit",
+            ],
             "contact_mapping": (
                 "TCP state byte is a verified two-bit mask: 0x01 = Input 1, "
                 "0x02 = Input 2"
             ),
             "pin_persisted": False,
+            "database_write_enabled": False,
+            "tcp_application_writes_enabled": False,
             "user_defined_names_redacted": True,
         },
     }
